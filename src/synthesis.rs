@@ -1,5 +1,8 @@
 use std::error::Error;
+use std::io::IsTerminal;
 use std::path::Path;
+
+use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 
 use crate::audio::{finish_utterance, normalize_leading_silence, write_wav};
 use crate::corpus::{decode_unit, DecodedUnit, VoiceDb};
@@ -12,6 +15,45 @@ pub(crate) enum JoinMode {
     Basic,
     Acoustic,
     Original,
+}
+
+struct SynthesisProgress {
+    bar: ProgressBar,
+}
+
+impl SynthesisProgress {
+    fn new(pair_count: usize, verbose: bool) -> Self {
+        let bar = if std::io::stderr().is_terminal() && !verbose {
+            let bar = ProgressBar::new((pair_count * 2 + 1) as u64);
+            bar.set_draw_target(ProgressDrawTarget::stderr_with_hz(10));
+            bar.set_style(
+                ProgressStyle::with_template(
+                    "{spinner:.cyan} {msg} [{wide_bar:.cyan/blue}] {pos}/{len}",
+                )
+                .expect("valid progress style")
+                .progress_chars("=>-"),
+            );
+            bar
+        } else {
+            ProgressBar::hidden()
+        };
+        bar.set_message("Selecting units");
+        Self { bar }
+    }
+
+    fn stage(&self, message: &'static str) {
+        self.bar.set_message(message);
+    }
+
+    fn advance(&self) {
+        self.bar.inc(1);
+    }
+}
+
+impl Drop for SynthesisProgress {
+    fn drop(&mut self) {
+        self.bar.finish_and_clear();
+    }
 }
 
 // Original renderer FUN_18002f780 interpolates these 16-step weights when it
@@ -254,7 +296,16 @@ fn candidates_for_pair(
     }
     let ids = db.candidate_ids(&name, 10_000)?;
     if ids.is_empty() {
-        return Err(format!("no diphone candidates for {name}").into());
+        return Ok(vec![Candidate {
+            id: u32::MAX,
+            cost: 500,
+            unit: None,
+            start: None,
+            end: None,
+            row: None,
+            next_row: None,
+            join_class,
+        }]);
     }
     let previous = if position == 0 {
         0
@@ -364,10 +415,10 @@ fn candidates_for_pair(
     } else {
         complete
     };
-    if candidates.is_empty() && phones[position + 1] == "pau" {
+    if candidates.is_empty() {
         candidates.push(Candidate {
             id: u32::MAX,
-            cost: 120,
+            cost: 500,
             unit: None,
             start: None,
             end: None,
@@ -467,6 +518,7 @@ pub(crate) fn speak(
     output_path: &Path,
     mode: JoinMode,
     targets: Option<&[FeatureRecord]>,
+    verbose: bool,
 ) -> Result<(), Box<dyn Error>> {
     if phones.len() != stress.len() {
         return Err("phone and stress counts disagree".into());
@@ -474,6 +526,13 @@ pub(crate) fn speak(
     if targets.is_some_and(|records| records.len() != phones.len()) {
         return Err("phone and target record counts disagree".into());
     }
+    if phones.len() < 2 {
+        let silence = vec![0; (db.sample_rate / 5) as usize];
+        write_wav(output_path, &silence, db.sample_rate)?;
+        eprintln!("Wrote {}", output_path.display());
+        return Ok(());
+    }
+    let progress = SynthesisProgress::new(phones.len() - 1, verbose);
     let feature_db = FeatureDb::load(db)?;
     let codes: Vec<u8> = phones
         .iter()
@@ -490,20 +549,24 @@ pub(crate) fn speak(
             position,
             targets,
         )?);
+        progress.advance();
     }
     let path = best_path(&layers, mode);
+    progress.stage("Rendering");
     let mut stitcher = Stitcher::default();
     for (position, &choice) in path.iter().enumerate() {
         let name = format!("{}-{}", phones[position], phones[position + 1]);
         let candidate = &layers[position][choice];
         if let Some(unit) = &candidate.unit {
-            eprintln!(
-                "{name}: unit {}, selection cost {}, {}/{} real samples",
-                candidate.id,
-                candidate.cost,
-                unit.available,
-                unit.samples.len()
-            );
+            if verbose {
+                eprintln!(
+                    "{name}: unit {}, selection cost {}, {}/{} real samples",
+                    candidate.id,
+                    candidate.cost,
+                    unit.available,
+                    unit.samples.len()
+                );
+            }
             let trimmed = trim_pause_silence(
                 unit,
                 phones[position] == "pau",
@@ -513,9 +576,13 @@ pub(crate) fn speak(
             stitcher.append(&trimmed)?;
         } else {
             stitcher.silence((db.sample_rate / 12) as usize);
-            eprintln!("{name}: silence fallback");
+            if verbose {
+                eprintln!("{name}: silence fallback");
+            }
         }
+        progress.advance();
     }
+    progress.stage("Writing WAV");
     stitcher.flush();
     let rate = db.sample_rate;
     // The original renderer labels decoded SILK units with the VOX header
@@ -526,10 +593,16 @@ pub(crate) fn speak(
     normalize_leading_silence(&mut output, rate);
     finish_utterance(&mut output, rate);
     write_wav(output_path, &output, rate)?;
-    eprintln!(
-        "wrote {} samples at {rate} Hz to {}",
-        output.len(),
-        output_path.to_string_lossy()
-    );
+    progress.advance();
+    drop(progress);
+    if verbose {
+        eprintln!(
+            "wrote {} samples at {rate} Hz to {}",
+            output.len(),
+            output_path.display()
+        );
+    } else {
+        eprintln!("Wrote {}", output_path.display());
+    }
     Ok(())
 }

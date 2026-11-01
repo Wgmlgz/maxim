@@ -20,7 +20,7 @@ fn phoneset() -> &'static HashMap<&'static str, [u8; 8]> {
     static TABLE: OnceLock<HashMap<&'static str, [u8; 8]>> = OnceLock::new();
     TABLE.get_or_init(|| {
         let mut result = HashMap::new();
-        for line in include_str!("../PHONES_RE.csv").lines().skip(1) {
+        for line in include_str!("../docs/PHONES_RE.csv").lines().skip(1) {
             let columns: Vec<&'static str> = line.split(',').collect();
             if columns.len() != 9 {
                 continue;

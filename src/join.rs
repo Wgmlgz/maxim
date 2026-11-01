@@ -17,7 +17,7 @@ pub(crate) enum JoinClass {
 
 impl JoinClass {
     /// Reproduces the attribute checks in voice `FUN_18000d580` using the
-    /// exact Russian phoneset attributes recorded in `PHONES_RE.csv`.
+    /// exact Russian phoneset attributes recorded in `docs/PHONES_RE.csv`.
     pub(crate) fn for_phones(left: &str, shared: &str) -> Self {
         if matches!(shared, "r" | "rj") {
             Self::Trill

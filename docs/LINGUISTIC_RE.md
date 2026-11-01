@@ -153,9 +153,19 @@ prove each feature was evaluated for every utterance.
 
 ## Remaining porting boundary
 
+The CLI now performs a tolerant normalization pass before the original
+lexicon/LTS path. It expands ordinary integers and short decimals into
+Russian words, maps common symbols, preserves Latin letters for the supplied
+LTS, and treats unsupported characters as token boundaries. The original
+`FUN_18000f620` token-to-words callback and `FUN_18000fd10` fallback cover
+many more date, currency, abbreviation, and context cases; `FUN_180012370`
+dispatches number forms. The current Rust rules are an approximation of those
+paths, not a byte-for-byte port of their tables or relation features.
+
 The lexicon, LTS, syllable CART, and consonant postlex now cover their checked
-paths. Ordinary text generation still needs the original tokenizer,
-normalizer (numbers, symbols, dates), POS annotation, full phrasing, intonation,
+paths. Ordinary text generation still needs the exact original tokenizer and
+normalizer (especially dates, currencies, and abbreviations), POS annotation,
+full phrasing, intonation,
 duration model, and original candidate search/rendering.
 These paths are registered and ordered above,
 but their complete behavior has not yet been ported or validated against a

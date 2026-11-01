@@ -34,7 +34,9 @@ and SILK), `features.rs` (candidate metadata), `join.rs` (original join costs),
 `target_cost.rs` (original target cost and active partial structural scoring),
 `duration.rs` (original VOX duration CART),
 `syllables.rs` (original syllable CART), `postlex.rs` (Russian consonant rules),
-`text.rs` (text relations), `tone.rs` (phrase-end tone tables),
+`text.rs` (text relations), `normalize.rs` (mixed-text normalization),
+`tone.rs` (phrase-end tone tables),
+`cli.rs` (argument parsing),
 `synthesis.rs` (unit search and stitching),
 `audio.rs` (WAV), and `main.rs` (CLI).
 
@@ -42,18 +44,28 @@ and SILK), `features.rs` (candidate metadata), `join.rs` (original join costs),
 
 ```sh
 cd maxim
-./target/release/maxim-native speak ./extracted/app/vox/vox_ru_maxim22i 'Привет, мама!' ./output.wav
+./target/release/maxim-native 'Привет, мама!'
+./target/release/maxim-native 'Цена 12,50 ₽. Hello, world!' -o mixed.wav
+printf 'Папа купил хлеб.\n' | ./target/release/maxim-native - -o papa.wav
 
 # Compare the earlier letter mapper and join heuristic:
-./target/release/maxim-native speak ./extracted/app/vox/vox_ru_maxim22i 'Папа купил хлеб.' ./papa-older.wav --simple-phones --basic-join
+./target/release/maxim-native 'Папа купил хлеб.' -o papa-older.wav --simple-phones --join basic
 
 # Compare the earlier context-only selector:
-./target/release/maxim-native speak ./extracted/app/vox/vox_ru_maxim22i 'Папа купил хлеб.' ./papa-heuristic.wav --heuristic-target
+./target/release/maxim-native 'Папа купил хлеб.' -o papa-heuristic.wav --heuristic-target
 ```
 
-`TEXT` is the third argument; quote it so spaces and punctuation stay together.
-The last argument is the output WAV path. The program supports Russian letters,
-spaces, and common punctuation; unsupported characters return an error. The
+The first argument is text; quote it so spaces and punctuation stay together.
+The default output is `output.wav`; use `-o` to choose another path. Explicit
+`speak` is optional. Use `--voice PATH` if the VOX database is elsewhere.
+An interactive terminal shows progress through unit selection and rendering.
+Redirected output gets only the final output path. Use `--verbose` for the
+phone sequence, selected units, costs, and sample counts; it hides the progress
+bar while those details print.
+Numbers, common symbols, English letters, and punctuation are accepted; the
+number and symbol wording is still a partial port of the original token
+normalizer, especially for dates and currency inflection. Unsupported symbols
+delimit tokens. The
 `speak` output is mono 16-bit PCM at 22.05 kHz, matching the supplied reference
 MP3s. SILK decoding internally requests 24 kHz, but the original renderer
 plays those decoded pitchmark periods at the VOX header rate of 22.05 kHz.
@@ -66,19 +78,18 @@ Internal hyphens are preserved for entries in the original lexicon.
 Diagnostic commands:
 
 ```sh
-VOX=./extracted/app/vox/vox_ru_maxim22i
-./target/release/maxim-native inspect "$VOX"
-./target/release/maxim-native phones "$VOX" 'Я люблю чай.'
-./target/release/maxim-native syllables "$VOX" 'Папа купил хлеб.'
-./target/release/maxim-native phones-simple "$VOX" 'Я люблю чай.'
-./target/release/maxim-native diphone "$VOX" a-b
-./target/release/maxim-native features "$VOX" 126192
-./target/release/maxim-native duration-text "$VOX" 'Папа купил хлеб.'
-./target/release/maxim-native lookup ./extracted/app/vox/lang_ru_ru.dat ./extracted/app/x64/voice_ru_maxim.dll автоматным
-./target/release/maxim-native pronounce ./extracted/app/vox/lang_ru_ru.dat ./extracted/app/x64/voice_ru_maxim.dll папа
-./target/release/maxim-native decode-unit "$VOX" 4 ./unit.wav
-./target/release/maxim-native decode-packet "$VOX" 0x20404fb ./packet.wav
-./target/release/maxim-native dump-diphone "$VOX" a-p ./a-p.mdu
+./target/release/maxim-native inspect
+./target/release/maxim-native phones 'Я люблю чай.'
+./target/release/maxim-native syllables 'Папа купил хлеб.'
+./target/release/maxim-native phones-simple 'Я люблю чай.'
+./target/release/maxim-native diphone a-b
+./target/release/maxim-native features 126192
+./target/release/maxim-native duration-text 'Папа купил хлеб.'
+./target/release/maxim-native lookup автоматным
+./target/release/maxim-native pronounce папа
+./target/release/maxim-native decode-unit 4 -o unit.wav
+./target/release/maxim-native decode-packet 0x20404fb -o packet.wav
+./target/release/maxim-native dump-diphone a-p -o a-p.mdu
 ```
 
 ## Port boundary
@@ -98,8 +109,8 @@ Recorded silence in `pau` units is trimmed at pitchmark boundaries, shortening
 the excessive gaps that occurred after punctuation.
 A complete port still needs the original tokenizer, POS and phrasing rules,
 full postlex phrase handling, exact duration and intonation targets, and full target cost integration. See
-[GENERATION_PATHS.md](GENERATION_PATHS.md) for the step-by-step original
-pipeline, and [RESEARCH.md](RESEARCH.md) for binary evidence and data-layout
+[GENERATION_PATHS.md](docs/GENERATION_PATHS.md) for the step-by-step original
+pipeline, and [RESEARCH.md](docs/RESEARCH.md) for binary evidence and data-layout
 notes.
 
 If you have the local reference and comparison WAVs, a rough spectral

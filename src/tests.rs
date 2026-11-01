@@ -66,6 +66,31 @@ fn original_lts_supplies_reduced_vowel_for_reference_phrase() {
 }
 
 #[test]
+fn mixed_text_reaches_the_original_pronunciation_path() {
+    let language = Path::new("extracted/app/vox/lang_ru_ru.dat");
+    let plugin = Path::new("extracted/app/x64/voice_ru_maxim.dll");
+    if !language.exists() || !plugin.exists() {
+        return;
+    }
+    let lexicon = Lexicon::open(language, plugin).unwrap();
+    let pronounced = crate::text::pronounced_original("Hello, мир! №42 😊", &lexicon).unwrap();
+    let words: Vec<_> = pronounced
+        .words
+        .iter()
+        .map(|word| word.name.as_str())
+        .collect();
+    assert_eq!(words, ["hello", "мир", "номер", "сорок", "два"]);
+    assert!(pronounced.names.len() > 10);
+    assert_eq!(
+        crate::text::pronounced_original("h", &lexicon)
+            .unwrap()
+            .words[0]
+            .name,
+        "h"
+    );
+}
+
+#[test]
 fn original_clitic_reduction_uses_extracted_phrase_tables() {
     let language = Path::new("extracted/app/vox/lang_ru_ru.dat");
     let plugin = Path::new("extracted/app/x64/voice_ru_maxim.dll");

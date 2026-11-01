@@ -1,6 +1,7 @@
 use std::error::Error;
 
 use crate::lexicon::Lexicon;
+use crate::normalize;
 use crate::postlex;
 use crate::syllables;
 
@@ -46,7 +47,8 @@ pub(crate) fn pronounced_original(
     let mut words = Vec::new();
     let mut word_index = 0;
     let mut word = String::new();
-    let chars: Vec<char> = text.to_lowercase().chars().collect();
+    let normalized = normalize::input(text);
+    let chars: Vec<char> = normalized.chars().collect();
     for (index, ch) in chars
         .iter()
         .copied()
@@ -63,7 +65,11 @@ pub(crate) fn pronounced_original(
             continue;
         }
         if !word.is_empty() {
-            let raw_phones = lexicon.pronounce(&word, None)?;
+            let raw_phones = pronounce_token(&word, lexicon)?;
+            if raw_phones.is_empty() {
+                word.clear();
+                continue;
+            }
             let word_start = result.len();
             let syllable_breaks = syllables::breaks(&raw_phones);
             for phone in &raw_phones {
@@ -127,8 +133,6 @@ pub(crate) fn pronounced_original(
             } else if let Some(last) = punctuation.last_mut() {
                 *last = Some(ch);
             }
-        } else {
-            return Err(format!("unsupported character {ch:?}").into());
         }
     }
     if result.last().is_some_and(|x| x != "pau") {
@@ -138,9 +142,6 @@ pub(crate) fn pronounced_original(
     }
     postlex::apply(&mut result, &words);
     postlex::reduce_clitics(&mut result, &mut stress, &mut syllable_records, &words);
-    if result.len() < 3 {
-        return Err("input contains no Russian letters".into());
-    }
     Ok(Pronounced {
         names: result,
         stress,
@@ -148,6 +149,58 @@ pub(crate) fn pronounced_original(
         words,
         punctuation,
     })
+}
+
+fn pronounce_token(word: &str, lexicon: &Lexicon) -> Result<Vec<String>, Box<dyn Error>> {
+    match lexicon.pronounce(word, None) {
+        Ok(phones) if !phones.is_empty() => return Ok(phones),
+        _ => {}
+    }
+    if word.contains('-') {
+        let mut phones = Vec::new();
+        for part in word.split('-').filter(|part| !part.is_empty()) {
+            phones.extend(pronounce_token(part, lexicon)?);
+        }
+        return Ok(phones);
+    }
+    if word.chars().all(|ch| ch.is_ascii_lowercase()) {
+        const LETTER_NAMES: [&str; 26] = [
+            "эй",
+            "би",
+            "си",
+            "ди",
+            "и",
+            "эф",
+            "джи",
+            "аш",
+            "ай",
+            "джей",
+            "кей",
+            "эл",
+            "эм",
+            "эн",
+            "оу",
+            "пи",
+            "кью",
+            "ар",
+            "эс",
+            "ти",
+            "ю",
+            "ви",
+            "даблъю",
+            "экс",
+            "уай",
+            "зед",
+        ];
+        let mut phones = Vec::new();
+        for ch in word.bytes() {
+            phones.extend(lexicon.pronounce(LETTER_NAMES[(ch - b'a') as usize], None)?);
+        }
+        return Ok(phones);
+    }
+    // Unknown characters have already been filtered by the normalizer.
+    // Preserve the rest of the sentence if this token has no usable phones.
+    Ok(Vec::new())
 }
 
 pub(crate) fn phonemes(text: &str) -> Result<Vec<String>, Box<dyn Error>> {

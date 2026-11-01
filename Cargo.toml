@@ -4,4 +4,6 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+clap = { version = "4.6.7", features = ["derive"] }
+indicatif = { version = "0.18.6", default-features = false }
 silk-v3-sys = "0.1.0"
