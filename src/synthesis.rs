@@ -19,16 +19,17 @@ pub(crate) enum JoinMode {
 
 struct SynthesisProgress {
     bar: ProgressBar,
+    pair_count: u64,
 }
 
 impl SynthesisProgress {
     fn new(pair_count: usize, verbose: bool) -> Self {
         let bar = if std::io::stderr().is_terminal() && !verbose {
-            let bar = ProgressBar::new((pair_count * 2 + 1) as u64);
+            let bar = ProgressBar::new(1000);
             bar.set_draw_target(ProgressDrawTarget::stderr_with_hz(10));
             bar.set_style(
                 ProgressStyle::with_template(
-                    "{spinner:.cyan} {msg} [{wide_bar:.cyan/blue}] {pos}/{len}",
+                    "{spinner:.cyan} {msg} [{wide_bar:.cyan/blue}] {percent}%",
                 )
                 .expect("valid progress style")
                 .progress_chars("=>-"),
@@ -38,15 +39,29 @@ impl SynthesisProgress {
             ProgressBar::hidden()
         };
         bar.set_message("Selecting units");
-        Self { bar }
+        Self {
+            bar,
+            pair_count: pair_count as u64,
+        }
     }
 
     fn stage(&self, message: &'static str) {
         self.bar.set_message(message);
     }
 
-    fn advance(&self) {
-        self.bar.inc(1);
+    fn selected(&self, count: usize) {
+        // Candidate search and decoding dominate synthesis time. Reserve the
+        // final 5% for path selection, stitching, and the WAV write.
+        self.bar.set_position(count as u64 * 950 / self.pair_count);
+    }
+
+    fn rendered(&self, count: usize) {
+        self.bar
+            .set_position(950 + count as u64 * 40 / self.pair_count);
+    }
+
+    fn complete(&self) {
+        self.bar.set_position(1000);
     }
 }
 
@@ -549,8 +564,9 @@ pub(crate) fn speak(
             position,
             targets,
         )?);
-        progress.advance();
+        progress.selected(position + 1);
     }
+    progress.stage("Choosing path");
     let path = best_path(&layers, mode);
     progress.stage("Rendering");
     let mut stitcher = Stitcher::default();
@@ -580,7 +596,7 @@ pub(crate) fn speak(
                 eprintln!("{name}: silence fallback");
             }
         }
-        progress.advance();
+        progress.rendered(position + 1);
     }
     progress.stage("Writing WAV");
     stitcher.flush();
@@ -593,7 +609,7 @@ pub(crate) fn speak(
     normalize_leading_silence(&mut output, rate);
     finish_utterance(&mut output, rate);
     write_wav(output_path, &output, rate)?;
-    progress.advance();
+    progress.complete();
     drop(progress);
     if verbose {
         eprintln!(

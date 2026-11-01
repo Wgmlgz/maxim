@@ -1,8 +1,9 @@
 use std::error::Error;
 use std::ffi::c_void;
-use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
 use std::path::Path;
+
+use crate::voice_file::VoiceFile;
 
 const HEADER_LEN: usize = 104;
 const MAX_SECTIONS: u32 = 13;
@@ -16,7 +17,7 @@ pub(crate) struct Section {
 
 #[derive(Debug)]
 pub(crate) struct VoiceDb {
-    pub(crate) file: File,
+    pub(crate) file: VoiceFile,
     pub(crate) size: u64,
     pub(crate) name: String,
     pub(crate) sample_rate: u32,
@@ -46,8 +47,7 @@ fn u32le(bytes: &[u8], offset: usize) -> u32 {
 
 impl VoiceDb {
     pub(crate) fn open(path: &Path) -> Result<Self, Box<dyn Error>> {
-        let mut file = File::open(path)?;
-        let size = file.metadata()?.len();
+        let (mut file, size) = VoiceFile::open(path)?;
         let mut header = [0u8; HEADER_LEN];
         file.read_exact(&mut header)?;
         if &header[..4] != b"DDXV" || u32le(&header, 0x30) != 1 {

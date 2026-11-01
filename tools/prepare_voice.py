@@ -22,9 +22,27 @@ def main() -> None:
     if len(sys.argv) > 2:
         raise SystemExit(__doc__)
     installer = Path(sys.argv[1] if len(sys.argv) == 2 else ROOT / "sources/247_S2G_Maxim.exe")
+    destination = ROOT / "extracted"
+    parts = destination / "app/vox/vox_ru_maxim22i.parts"
+    part_files = (
+        [
+            parts.with_name(f"vox_ru_maxim22i.part{line.split()[1]}")
+            for line in parts.read_text().splitlines()
+            if line.startswith("part ")
+        ]
+        if parts.is_file()
+        else []
+    )
+    if (
+        part_files
+        and all(path.is_file() for path in part_files)
+        and (destination / RUNTIME[0]).is_file()
+        and (destination / RUNTIME[2]).is_file()
+    ):
+        print(f"checked-in voice parts already ready in {destination}")
+        return
     if not installer.is_file():
         raise SystemExit(f"installer not found: {installer}")
-    destination = ROOT / "extracted"
     present = [destination / path for path in RUNTIME if (destination / path).exists()]
     if len(present) == len(RUNTIME):
         print(f"voice files already present in {destination}")

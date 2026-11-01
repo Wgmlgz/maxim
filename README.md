@@ -14,20 +14,25 @@ target-based unit selection remain incomplete.
 cargo build --release
 ```
 
+Pushes to `main` run [GitHub Actions](.github/workflows/build.yml) builds for
+Linux x86-64 and ARM64, macOS Intel and Apple Silicon, and Windows x86-64.
+Pushes to the `release` branch build the same five archives and publish them as
+assets on the GitHub Release tagged with the version from `Cargo.toml` (for
+example, `v0.1.0`). A later push with the same version replaces those assets;
+bump the package version for a new release. Each `.tar.gz` or `.zip` archive
+contains the executable and voice data in the required directory layout.
+Extract it and run the executable from the extracted top-level directory.
+
 The `silk-v3-sys` crate builds the SILK C decoder locally. Its build requires a
 C compiler and libclang. No Windows DLL or network service is used at runtime.
 
-Place your supplied `247_S2G_Maxim.exe` in `sources/`, then extract only the
-runtime files with `innoextract`:
-
-```sh
-python3 tools/prepare_voice.py
-```
-
-You can also pass the installer's path as an argument. The installer, extracted
-voice data, sample recordings, and generated WAVs are local files excluded
-from Git. The 209 MB VOX file exceeds GitHub's regular per-file limit. The
-extractor keeps existing voice files intact.
+The repository includes the required voice data. The VOX corpus is tracked as
+seven numbered parts of at most 32 MiB, with a manifest and SHA-256 hashes.
+The program reads these parts directly; a fresh clone needs no extraction or
+assembly script. If you already have the original unsplit VOX file at the
+default path, the program can read that too. The supplied installer remains
+excluded from Git. `tools/prepare_voice.py` is optional for working with the
+installer, and recognizes the checked-in parts as ready.
 
 Source is split into `lexicon.rs` (Russian lexicon and LTS), `corpus.rs` (DDXV
 and SILK), `features.rs` (candidate metadata), `join.rs` (original join costs),
@@ -45,6 +50,7 @@ and SILK), `features.rs` (candidate metadata), `join.rs` (original join costs),
 ```sh
 cd maxim
 ./target/release/maxim-native 'Привет, мама!'
+./target/release/maxim-native 'Привет, мама!' --play
 ./target/release/maxim-native 'Цена 12,50 ₽. Hello, world!' -o mixed.wav
 printf 'Папа купил хлеб.\n' | ./target/release/maxim-native - -o papa.wav
 
@@ -58,6 +64,9 @@ printf 'Папа купил хлеб.\n' | ./target/release/maxim-native - -o pa
 The first argument is text; quote it so spaces and punctuation stay together.
 The default output is `output.wav`; use `-o` to choose another path. Explicit
 `speak` is optional. Use `--voice PATH` if the VOX database is elsewhere.
+`--play` plays the generated WAV after writing it, using `afplay` on macOS, or
+an installed `pw-play`, `paplay`, `aplay`, or `ffplay` on Linux. On Windows it
+uses PowerShell's WAV player. The WAV remains at the selected output path.
 An interactive terminal shows progress through unit selection and rendering.
 Redirected output gets only the final output path. Use `--verbose` for the
 phone sequence, selected units, costs, and sample counts; it hides the progress

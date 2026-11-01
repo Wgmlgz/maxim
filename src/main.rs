@@ -6,12 +6,14 @@ mod features;
 mod join;
 mod lexicon;
 mod normalize;
+mod playback;
 mod postlex;
 mod syllables;
 mod synthesis;
 mod target_cost;
 mod text;
 mod tone;
+mod voice_file;
 
 use std::error::Error;
 use std::fs::File;
@@ -75,6 +77,7 @@ fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             simple_phones,
             heuristic_target,
             verbose,
+            play,
         } => {
             let mut db = VoiceDb::open(&vox)?;
             let input = if text == "-" {
@@ -128,6 +131,9 @@ fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
                 targets.as_deref(),
                 verbose,
             )?;
+            if play {
+                playback::play(&output)?;
+            }
         }
         Command::Inspect => {
             let db = VoiceDb::open(&vox)?;

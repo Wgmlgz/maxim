@@ -1,10 +1,20 @@
 # Rust build products
 /target/
 
-# Original installer and locally extracted voice data. The VOX file is over
-# GitHub's regular per-file limit; tools/prepare_voice.py restores these files.
+# Original installer and unsplit local voice data. Track only the runtime
+# language files and 32 MiB VOX parts needed for a ready-to-use clone.
 /sources/
-/extracted/
+/extracted/*
+!/extracted/app/
+/extracted/app/*
+!/extracted/app/vox/
+!/extracted/app/x64/
+/extracted/app/vox/*
+!/extracted/app/vox/lang_ru_ru.dat
+!/extracted/app/vox/vox_ru_maxim22i.parts
+!/extracted/app/vox/vox_ru_maxim22i.part[0-9][0-9][0-9]
+/extracted/app/x64/*
+!/extracted/app/x64/voice_ru_maxim.dll
 
 # Local recordings, comparisons, and reverse-engineering artifacts
 /samples/

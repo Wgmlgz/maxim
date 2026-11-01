@@ -43,6 +43,9 @@ pub(crate) enum Command {
         /// Show phones, unit choices, and sample counts; disables the progress bar
         #[arg(short, long)]
         verbose: bool,
+        /// Play the generated WAV with a local audio player
+        #[arg(long)]
+        play: bool,
     },
     /// Show VOX metadata
     Inspect,

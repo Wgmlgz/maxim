@@ -1,0 +1,115 @@
+name: Build native CLI
+
+on:
+  push:
+    branches: [main, release]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            name: linux-x86_64
+            executable: maxim-native
+          - os: ubuntu-24.04-arm
+            name: linux-aarch64
+            executable: maxim-native
+          - os: macos-15-intel
+            name: macos-x86_64
+            executable: maxim-native
+          - os: macos-15
+            name: macos-aarch64
+            executable: maxim-native
+          - os: windows-2025
+            name: windows-x86_64
+            executable: maxim-native.exe
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install libclang on Linux
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y clang libclang-dev
+
+      - name: Locate libclang on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $llvm = 'C:\Program Files\LLVM\bin'
+          if (!(Test-Path "$llvm\libclang.dll")) { throw "libclang.dll missing from $llvm" }
+          "LIBCLANG_PATH=$llvm" >> $env:GITHUB_ENV
+
+      - name: Test
+        run: cargo test --locked
+
+      - name: Build release CLI
+        run: cargo build --release --locked
+
+      - name: Check bundled voice
+        shell: bash
+        run: ./target/release/${{ matrix.executable }} inspect
+
+      - name: Stage ready-to-run archive
+        shell: bash
+        run: |
+          mkdir -p dist/extracted/app/vox dist/extracted/app/x64
+          cp target/release/${{ matrix.executable }} dist/
+          cp extracted/app/vox/lang_ru_ru.dat extracted/app/vox/vox_ru_maxim22i.parts extracted/app/vox/vox_ru_maxim22i.part[0-9][0-9][0-9] dist/extracted/app/vox/
+          cp extracted/app/x64/voice_ru_maxim.dll dist/extracted/app/x64/
+          cp README.md dist/
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            7z a "maxim-native-${{ matrix.name }}.zip" ./dist/*
+          else
+            tar -czf "maxim-native-${{ matrix.name }}.tar.gz" -C dist .
+          fi
+
+      - name: Upload ready-to-run archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: maxim-native-${{ matrix.name }}
+          path: maxim-native-${{ matrix.name }}.*
+          if-no-files-found: error
+
+  publish:
+    name: Publish GitHub Release
+    if: github.event_name == 'push' && github.ref == 'refs/heads/release'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all platform archives
+        uses: actions/download-artifact@v4
+        with:
+          pattern: maxim-native-*
+          path: dist
+          merge-multiple: true
+
+      - name: Publish archives to versioned release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=$(python3 -c 'import tomllib; print(tomllib.load(open("Cargo.toml", "rb"))["package"]["version"])')
+          tag="v${version}"
+          shopt -s nullglob
+          archives=(dist/maxim-native-*.tar.gz dist/maxim-native-*.zip)
+          if [[ ${#archives[@]} -ne 5 ]]; then
+            echo "Expected five platform archives, found ${#archives[@]}" >&2
+            exit 1
+          fi
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" "${archives[@]}" --clobber
+          else
+            gh release create "$tag" "${archives[@]}" \
+              --target "$GITHUB_SHA" \
+              --title "Maxim native ${version}" \
+              --notes "Offline Maxim text-to-speech CLI. Each archive includes the voice data and can run without extracting the original installer."
+          fi
