@@ -1,0 +1,149 @@
+# Extracted from voice_ru_maxim.dll, SHA256 6c1bb6badc0d6aa3a2b6dbffeb721e027c00fd0eab24b021140e372bf10d5d56
+devoice	b	p
+devoice	bj	pj
+devoice	d	t
+devoice	dj	tj
+devoice	g	k
+devoice	gj	kj
+devoice	v	f
+devoice	vj	fj
+devoice	z	s
+devoice	zj	sj
+devoice	zh	sh
+devoice	zzh	sch
+voice	p	b
+voice	pj	bj
+voice	t	d
+voice	tj	dj
+voice	k	g
+voice	kj	gj
+voice	f	v
+voice	fj	vj
+voice	s	z
+voice	sj	zj
+voice	sh	zh
+voice	sch	zzh
+sonorant	l
+sonorant	lj
+sonorant	m
+sonorant	mj
+sonorant	n
+sonorant	nj
+sonorant	r
+sonorant	rj
+sonorant	v
+sonorant	vj
+sonorant	j
+exception	без
+exception	в
+exception	из
+exception	из-под
+exception	над
+exception	об
+exception	перед
+exception	по-над
+exception	под
+exception	через
+exception	чтоб
+reduction_anchor	без
+reduction_anchor	безо
+reduction_anchor	во
+reduction_anchor	для
+reduction_anchor	до
+reduction_anchor	за
+reduction_anchor	из
+reduction_anchor	из-за
+reduction_anchor	из-под
+reduction_anchor	ко
+reduction_anchor	на
+reduction_anchor	над
+reduction_anchor	о
+reduction_anchor	об
+reduction_anchor	обо
+reduction_anchor	от
+reduction_anchor	перед
+reduction_anchor	по
+reduction_anchor	под
+reduction_anchor	при
+reduction_anchor	про
+reduction_anchor	со
+reduction_anchor	среди
+reduction_anchor	через
+reduction_anchor	у
+reduction_anchor	бы
+reduction_anchor	ведь
+reduction_anchor	же
+reduction_anchor	и
+reduction_anchor	ли
+reduction_anchor	не
+reduction_pair	без	году
+reduction_pair	без	вести
+reduction_pair	без	толку
+reduction_pair	без	четверти
+reduction_pair	до	смерти
+reduction_pair	за	уши
+reduction_pair	за	сто
+reduction_pair	за	три
+reduction_pair	за	ухо
+reduction_pair	за	два
+reduction_pair	за	нос
+reduction_pair	за	гору
+reduction_pair	за	зиму
+reduction_pair	за	ногу
+reduction_pair	за	сеном
+reduction_pair	за	слово
+reduction_pair	за	город
+reduction_pair	за	полночь
+reduction_pair	из	виду
+reduction_pair	из	дому
+reduction_pair	из	лесу
+reduction_pair	из	носу
+reduction_pair	на	сто
+reduction_pair	на	год
+reduction_pair	на	два
+reduction_pair	на	уши
+reduction_pair	на	душу
+reduction_pair	на	зиму
+reduction_pair	на	небо
+reduction_pair	на	день
+reduction_pair	на	воду
+reduction_pair	на	ноги
+reduction_pair	на	ногу
+reduction_pair	на	ночь
+reduction_pair	на	печь
+reduction_pair	на	поле
+reduction_pair	на	руку
+reduction_pair	на	угол
+reduction_pair	на	берег
+reduction_pair	на	весну
+reduction_pair	на	спину
+reduction_pair	на	шесть
+reduction_pair	на	голову
+reduction_pair	на	десять
+reduction_pair	на	сторону
+reduction_pair	на	озери
+reduction_pair	на	сердце
+reduction_pair	не	был
+reduction_pair	не	дан
+reduction_pair	от	роду
+reduction_pair	под	нос
+reduction_pair	под	воду
+reduction_pair	под	гору
+reduction_pair	под	ноги
+reduction_pair	под	руки
+reduction_pair	под	вечер
+reduction_pair	под	носом
+reduction_pair	по	два
+reduction_pair	по	три
+reduction_pair	по	уху
+reduction_pair	по	цепи
+reduction_pair	по	двое
+reduction_pair	по	лесу
+reduction_pair	по	морю
+reduction_pair	по	полу
+reduction_pair	по	полю
+reduction_pair	по	трое
+reduction_pair	со	сто
+reduction_triple	на	две	части
+reduction_triple	ни	за	что
+reduction_triple	ни	про	что

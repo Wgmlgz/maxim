@@ -1,0 +1,21 @@
+# Extracted from voice_ru_maxim.dll, SHA256 6c1bb6badc0d6aa3a2b6dbffeb721e027c00fd0eab24b021140e372bf10d5d56
+question_h	а
+question_h	верно
+question_h	да
+question_h	ладно
+question_h	лады
+question_h	нет
+question_h	ок
+question_h	окэй
+question_h	помнишь
+question_h	понимаете
+question_h	понял
+question_h	правда
+question_h	так
+question_h	хорошо
+question_h	ты	знаешь
+question_h	что	ли
+question_h	не	правда	ли
+question_h	не	так	ли
+alternative	или
+alternative	либо

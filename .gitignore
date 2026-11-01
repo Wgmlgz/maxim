@@ -1,0 +1,21 @@
+# Rust build products
+/target/
+
+# Original installer and locally extracted voice data. The VOX file is over
+# GitHub's regular per-file limit; tools/prepare_voice.py restores these files.
+/sources/
+/extracted/
+
+# Local recordings, comparisons, and reverse-engineering artifacts
+/samples/
+/analysis/
+/comparison/
+*.wav
+*.mp3
+*.mdu
+*.snapshot.json
+
+# Python and OS-generated files
+__pycache__/
+*.py[cod]
+.DS_Store

@@ -1,0 +1,7 @@
+[package]
+name = "maxim-native"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+silk-v3-sys = "0.1.0"
