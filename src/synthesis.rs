@@ -1,6 +1,8 @@
 use std::error::Error;
 use std::io::IsTerminal;
 use std::path::Path;
+use std::thread;
+use std::time::Instant;
 
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 
@@ -9,6 +11,7 @@ use crate::corpus::{decode_unit, DecodedUnit, VoiceDb};
 use crate::features::FeatureDb;
 use crate::join::{self, JoinClass};
 use crate::target_cost::{self, FeatureRecord};
+use crate::unit_index::UnitIndex;
 
 #[derive(Clone, Copy, Eq, PartialEq)]
 pub(crate) enum JoinMode {
@@ -97,6 +100,7 @@ struct Candidate {
     id: u32,
     cost: i32,
     unit: Option<DecodedUnit>,
+    coverage: Option<(usize, usize)>,
     start: Option<BoundaryFeatures>,
     end: Option<BoundaryFeatures>,
     row: Option<[u8; 36]>,
@@ -289,6 +293,8 @@ impl Stitcher {
 fn candidates_for_pair(
     db: &mut VoiceDb,
     feature_db: &FeatureDb,
+    mode: JoinMode,
+    unit_index: Option<&UnitIndex>,
     phones: &[String],
     stress: &[Option<u8>],
     codes: &[u8],
@@ -302,6 +308,7 @@ fn candidates_for_pair(
             id: u32::MAX,
             cost: 0,
             unit: None,
+            coverage: None,
             start: None,
             end: None,
             row: None,
@@ -315,6 +322,7 @@ fn candidates_for_pair(
             id: u32::MAX,
             cost: 500,
             unit: None,
+            coverage: None,
             start: None,
             end: None,
             row: None,
@@ -346,19 +354,19 @@ fn candidates_for_pair(
             let right = feature_db.decode(db, id.saturating_add(1))?;
             let left = FeatureRecord::from_candidate(&left);
             let right = FeatureRecord::from_candidate(&right);
-            let left_cost = target_cost::known_single(&left, &targets[position]);
-            let right_cost = target_cost::known_single(&right, &targets[position + 1]);
+            let left_cost = if phones[position] == "pau" {
+                target_cost::known_single(&left, &targets[position])
+            } else {
+                0
+            };
+            let right_cost = if phones[position + 1] == "pau" {
+                target_cost::known_single(&right, &targets[position + 1])
+            } else {
+                0
+            };
             target_cost::known_pair(&left, &right, &targets[position], &targets[position + 1])
-                - if phones[position] == "pau" {
-                    left_cost
-                } else {
-                    0
-                }
-                - if phones[position + 1] == "pau" {
-                    right_cost
-                } else {
-                    0
-                }
+                - left_cost
+                - right_cost
         } else {
             0
         };
@@ -393,21 +401,37 @@ fn candidates_for_pair(
         if targets.is_some() && score > cutoff && context_cost == 100 {
             continue;
         }
-        let Ok(unit) = decode_unit(db, id) else {
-            continue;
+        let (unit, coverage, start, end) = if let Some(index) = unit_index {
+            let Some(coverage) = index.coverage(id) else {
+                continue;
+            };
+            (None, Some(coverage), None, None)
+        } else {
+            let Ok(unit) = decode_unit(db, id) else {
+                continue;
+            };
+            if unit.available == 0 {
+                continue;
+            }
+            let coverage = (unit.samples.len(), unit.available);
+            let (start, end) = if mode == JoinMode::Original {
+                (None, None)
+            } else {
+                let (start, end) = unit_boundaries(&unit, db.sample_rate);
+                (Some(start), Some(end))
+            };
+            (Some(unit), Some(coverage), start, end)
         };
-        if unit.available == 0 {
-            continue;
-        }
-        let missing = unit.samples.len() - unit.available;
-        let coverage_cost = (missing * 200 / unit.samples.len()) as i32;
-        let (start, end) = unit_boundaries(&unit, db.sample_rate);
+        let (wanted, available) = coverage.unwrap();
+        let missing = wanted - available;
+        let coverage_cost = (missing * 200 / wanted) as i32;
         let candidate = Candidate {
             id,
             cost: score + coverage_cost,
-            unit: Some(unit),
-            start: Some(start),
-            end: Some(end),
+            unit,
+            coverage,
+            start,
+            end,
             row: Some(meta),
             next_row: db.unit_metadata(id.saturating_add(1)).ok(),
             join_class,
@@ -435,6 +459,7 @@ fn candidates_for_pair(
             id: u32::MAX,
             cost: 500,
             unit: None,
+            coverage: None,
             start: None,
             end: None,
             row: None,
@@ -534,6 +559,7 @@ pub(crate) fn speak(
     mode: JoinMode,
     targets: Option<&[FeatureRecord]>,
     verbose: bool,
+    jobs: usize,
 ) -> Result<(), Box<dyn Error>> {
     if phones.len() != stress.len() {
         return Err("phone and stress counts disagree".into());
@@ -548,16 +574,35 @@ pub(crate) fn speak(
         return Ok(());
     }
     let progress = SynthesisProgress::new(phones.len() - 1, verbose);
+    let profile = std::env::var_os("MAXIM_PROFILE").is_some();
+    let started = Instant::now();
+    let unit_index = if mode == JoinMode::Original {
+        UnitIndex::load(db)?
+    } else {
+        None
+    };
     let feature_db = FeatureDb::load(db)?;
     let codes: Vec<u8> = phones
         .iter()
         .map(|p| db.phone_code(p))
         .collect::<Result<_, _>>()?;
-    let mut layers = Vec::new();
-    for position in 0..phones.len() - 1 {
+    let prepared = Instant::now();
+    let pair_count = phones.len() - 1;
+    let workers = if jobs == 0 {
+        thread::available_parallelism()
+            .map_or(1, usize::from)
+            .min(8)
+    } else {
+        jobs.min(16)
+    }
+    .min(pair_count);
+    let mut layers = Vec::with_capacity(pair_count);
+    for position in 0..pair_count {
         layers.push(candidates_for_pair(
             db,
             &feature_db,
+            mode,
+            unit_index.as_ref(),
             phones,
             stress,
             &codes,
@@ -566,14 +611,68 @@ pub(crate) fn speak(
         )?);
         progress.selected(position + 1);
     }
+    let selected = Instant::now();
     progress.stage("Choosing path");
     let path = best_path(&layers, mode);
+    let searched = Instant::now();
     progress.stage("Rendering");
+    let mut decoded_units: Vec<Option<DecodedUnit>> =
+        std::iter::repeat_with(|| None).take(path.len()).collect();
+    if unit_index.is_some() && workers > 1 && path.len() >= 8 {
+        progress.stage("Decoding selected units");
+        let template = &*db;
+        let results: Result<Vec<_>, Box<dyn Error>> = thread::scope(|scope| {
+            let handles: Vec<_> = (0..workers)
+                .map(|worker| {
+                    let path = &path;
+                    let layers = &layers;
+                    scope.spawn(move || -> Result<Vec<(usize, DecodedUnit)>, String> {
+                        let mut local_db =
+                            template.worker_copy().map_err(|error| error.to_string())?;
+                        let mut result = Vec::new();
+                        for position in (worker..path.len()).step_by(workers) {
+                            let candidate = &layers[position][path[position]];
+                            if candidate.id != u32::MAX && candidate.unit.is_none() {
+                                let unit = decode_unit(&mut local_db, candidate.id)
+                                    .map_err(|error| error.to_string())?;
+                                result.push((position, unit));
+                            }
+                        }
+                        Ok(result)
+                    })
+                })
+                .collect();
+            let mut results = Vec::with_capacity(workers);
+            for handle in handles {
+                results.push(handle.join().map_err(|_| "decode worker panicked")??);
+            }
+            Ok(results)
+        });
+        for worker in results? {
+            for (position, unit) in worker {
+                decoded_units[position] = Some(unit);
+            }
+        }
+        progress.stage("Rendering");
+    }
     let mut stitcher = Stitcher::default();
     for (position, &choice) in path.iter().enumerate() {
         let name = format!("{}-{}", phones[position], phones[position + 1]);
         let candidate = &layers[position][choice];
-        if let Some(unit) = &candidate.unit {
+        if candidate.id != u32::MAX {
+            let decoded;
+            let unit =
+                if let Some(unit) = candidate.unit.as_ref().or(decoded_units[position].as_ref()) {
+                    unit
+                } else {
+                    decoded = decode_unit(db, candidate.id)?;
+                    &decoded
+                };
+            if candidate.coverage != Some((unit.samples.len(), unit.available)) {
+                return Err(
+                    format!("unit index coverage disagrees for unit {}", candidate.id).into(),
+                );
+            }
             if verbose {
                 eprintln!(
                     "{name}: unit {}, selection cost {}, {}/{} real samples",
@@ -609,6 +708,16 @@ pub(crate) fn speak(
     normalize_leading_silence(&mut output, rate);
     finish_utterance(&mut output, rate);
     write_wav(output_path, &output, rate)?;
+    if profile {
+        eprintln!(
+            "timings: prepare={:?} selection={:?} path={:?} render/write={:?} total={:?}",
+            prepared - started,
+            selected - prepared,
+            searched - selected,
+            Instant::now() - searched,
+            started.elapsed(),
+        );
+    }
     progress.complete();
     drop(progress);
     if verbose {

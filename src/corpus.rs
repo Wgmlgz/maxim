@@ -1,7 +1,8 @@
 use std::error::Error;
 use std::ffi::c_void;
 use std::io::{Read, Seek, SeekFrom};
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use crate::voice_file::VoiceFile;
 
@@ -18,13 +19,14 @@ pub(crate) struct Section {
 #[derive(Debug)]
 pub(crate) struct VoiceDb {
     pub(crate) file: VoiceFile,
+    pub(crate) path: PathBuf,
     pub(crate) size: u64,
     pub(crate) name: String,
     pub(crate) sample_rate: u32,
     pub(crate) codec: u32,
     pub(crate) checksum: u32,
     pub(crate) sections: Vec<Section>,
-    metadata: Option<Vec<u8>>,
+    metadata: Option<Arc<[u8]>>,
 }
 
 #[derive(Debug)]
@@ -46,6 +48,20 @@ fn u32le(bytes: &[u8], offset: usize) -> u32 {
 }
 
 impl VoiceDb {
+    pub(crate) fn worker_copy(&self) -> std::io::Result<Self> {
+        Ok(Self {
+            file: self.file.reopen(&self.path)?,
+            path: self.path.clone(),
+            size: self.size,
+            name: self.name.clone(),
+            sample_rate: self.sample_rate,
+            codec: self.codec,
+            checksum: self.checksum,
+            sections: self.sections.clone(),
+            metadata: self.metadata.clone(),
+        })
+    }
+
     pub(crate) fn open(path: &Path) -> Result<Self, Box<dyn Error>> {
         let (mut file, size) = VoiceFile::open(path)?;
         let mut header = [0u8; HEADER_LEN];
@@ -76,6 +92,7 @@ impl VoiceDb {
         let name = String::from_utf8_lossy(&header[4..4 + name_end]).to_string();
         Ok(Self {
             file,
+            path: path.to_owned(),
             size,
             name,
             sample_rate: u32le(&header, 0x24),
@@ -225,7 +242,7 @@ impl VoiceDb {
             self.file.seek(SeekFrom::Start(section.offset as u64))?;
             let mut data = vec![0u8; section.len as usize];
             self.file.read_exact(&mut data)?;
-            self.metadata = Some(data);
+            self.metadata = Some(Arc::from(data));
         }
         let data = self.metadata.as_ref().unwrap();
         let start = id as usize * 36;

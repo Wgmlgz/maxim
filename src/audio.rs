@@ -1,10 +1,10 @@
 use std::error::Error;
 use std::fs::File;
-use std::io::Write;
+use std::io::{BufWriter, Write};
 use std::path::Path;
 
 pub(crate) fn write_wav(path: &Path, samples: &[i16], rate: u32) -> Result<(), Box<dyn Error>> {
-    let mut f = File::create(path)?;
+    let mut f = BufWriter::with_capacity(64 * 1024, File::create(path)?);
     let data_len = u32::try_from(samples.len() * 2)?;
     f.write_all(b"RIFF")?;
     f.write_all(&(36 + data_len).to_le_bytes())?;
@@ -21,6 +21,7 @@ pub(crate) fn write_wav(path: &Path, samples: &[i16], rate: u32) -> Result<(), B
     for s in samples {
         f.write_all(&s.to_le_bytes())?;
     }
+    f.flush()?;
     Ok(())
 }
 

@@ -31,6 +31,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
       - name: Install libclang on Linux
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y clang libclang-dev
@@ -58,11 +62,20 @@ jobs:
         run: |
           mkdir -p dist/extracted/app/vox dist/extracted/app/x64
           cp target/release/${{ matrix.executable }} dist/
-          cp extracted/app/vox/lang_ru_ru.dat extracted/app/vox/vox_ru_maxim22i.parts extracted/app/vox/vox_ru_maxim22i.part[0-9][0-9][0-9] dist/extracted/app/vox/
+          cp extracted/app/vox/lang_ru_ru.dat extracted/app/vox/vox_ru_maxim22i.unitidx dist/extracted/app/vox/
+          cat extracted/app/vox/vox_ru_maxim22i.part[0-9][0-9][0-9] > dist/extracted/app/vox/vox_ru_maxim22i
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib
+          voice = Path('dist/extracted/app/vox/vox_ru_maxim22i')
+          manifest = Path('extracted/app/vox/vox_ru_maxim22i.parts').read_text().splitlines()
+          expected = next(line.split()[1] for line in manifest if line.startswith('sha256 '))
+          assert hashlib.sha256(voice.read_bytes()).hexdigest() == expected
+          PY
           cp extracted/app/x64/voice_ru_maxim.dll dist/extracted/app/x64/
           cp README.md dist/
           if [[ "$RUNNER_OS" == "Windows" ]]; then
-            7z a "maxim-native-${{ matrix.name }}.zip" ./dist/*
+            (cd dist && 7z a "../maxim-native-${{ matrix.name }}.zip" *)
           else
             tar -czf "maxim-native-${{ matrix.name }}.tar.gz" -C dist .
           fi

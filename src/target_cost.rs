@@ -3,25 +3,42 @@
 //! scorer remains available for a complete relation graph. Offsets refer to
 //! the original 0xb8-byte expanded feature record.
 
-use std::collections::BTreeMap;
-
 use crate::features::CandidateFeatures;
 use crate::postlex;
 use crate::syllables::phone_feature;
 use crate::text::Pronounced;
 use crate::tone;
+use std::sync::Arc;
 
 #[derive(Clone, Debug)]
 pub(crate) struct FeatureRecord {
     bytes: [u8; 0xb8],
-    strings: BTreeMap<usize, String>,
+    strings: [Option<Arc<str>>; 12],
+}
+
+fn name_slot(offset: usize) -> usize {
+    match offset {
+        0x08 => 0,
+        0x10 => 1,
+        0x18 => 2,
+        0x20 => 3,
+        0x28 => 4,
+        0x48 => 5,
+        0x58 => 6,
+        0x68 => 7,
+        0x78 => 8,
+        0x88 => 9,
+        0x98 => 10,
+        0xa0 => 11,
+        _ => panic!("unsupported feature name offset {offset:#x}"),
+    }
 }
 
 impl FeatureRecord {
     pub(crate) fn empty() -> Self {
         Self {
             bytes: [0; 0xb8],
-            strings: BTreeMap::new(),
+            strings: std::array::from_fn(|_| None),
         }
     }
 
@@ -32,15 +49,15 @@ impl FeatureRecord {
             .into_iter()
             .zip(&feature.context_names)
         {
-            record.set_name(offset, name);
+            record.strings[name_slot(offset)] = Some(Arc::clone(name));
         }
         for (offset, name) in [0x48, 0x58, 0x68, 0x78]
             .into_iter()
             .zip(&feature.middle_names)
         {
-            record.set_name(offset, name);
+            record.strings[name_slot(offset)] = Some(Arc::clone(name));
         }
-        record.set_name(0x88, &feature.tail_name);
+        record.strings[name_slot(0x88)] = Some(Arc::clone(&feature.tail_name));
         record.bytes[0x30] = feature.raw_row[7] & 15;
         record.bytes[0x31] = feature.raw_row[7] >> 4;
         let head = &feature.head_bytes;
@@ -75,7 +92,7 @@ impl FeatureRecord {
     }
 
     pub(crate) fn set_name(&mut self, offset: usize, value: &str) {
-        self.strings.insert(offset, value.to_string());
+        self.strings[name_slot(offset)] = Some(Arc::from(value));
     }
 
     pub(crate) fn set_byte(&mut self, offset: usize, value: u8) {
@@ -87,7 +104,7 @@ impl FeatureRecord {
     }
 
     fn name(&self, offset: usize) -> &str {
-        self.strings.get(&offset).map(String::as_str).unwrap_or("")
+        self.strings[name_slot(offset)].as_deref().unwrap_or("")
     }
 
     fn byte(&self, offset: usize) -> u8 {

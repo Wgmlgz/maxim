@@ -246,10 +246,13 @@ fn compact_candidate_features_expand_from_voice_sections() {
     let mut db = VoiceDb::open(path).unwrap();
     let feature_db = FeatureDb::load(&mut db).unwrap();
     let feature = feature_db.decode(&mut db, 191295).unwrap();
-    assert_eq!(feature.context_names, ["0", "pau", "p", "a", "eh"]);
+    assert_eq!(
+        feature.context_names.each_ref().map(AsRef::as_ref),
+        ["0", "pau", "p", "a", "eh"]
+    );
     assert_eq!(feature.section6_offset, 0x20103e);
     assert!((feature.duration_seconds - 0.038).abs() < 0.00001);
-    assert_eq!(feature.tail_name, "L*");
+    assert_eq!(feature.tail_name.as_ref(), "L*");
     assert_eq!(feature.content_flags, [false; 3]);
     for id in [0, 277, 126192, 451463] {
         assert_eq!(feature_db.decode(&mut db, id).unwrap().unit_id, id);

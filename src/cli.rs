@@ -46,9 +46,17 @@ pub(crate) enum Command {
         /// Play the generated WAV with a local audio player
         #[arg(long)]
         play: bool,
+        /// Selection workers (0 chooses automatically; 1 disables parallel selection)
+        #[arg(long, default_value_t = 0)]
+        jobs: usize,
     },
     /// Show VOX metadata
     Inspect,
+    /// Precompute exact unit validity and coverage for faster synthesis
+    BuildUnitIndex {
+        #[arg(long, default_value_t = 8)]
+        jobs: usize,
+    },
     /// List corpus candidate IDs for a diphone
     Diphone { name: String },
     /// Show original pronunciation phones for text
@@ -99,6 +107,7 @@ fn should_inject_speak(args: &[OsString]) -> bool {
     let known = [
         "speak",
         "inspect",
+        "build-unit-index",
         "diphone",
         "phones",
         "syllables",

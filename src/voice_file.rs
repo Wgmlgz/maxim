@@ -24,6 +24,25 @@ impl VoiceFile {
         let size = parts.size;
         Ok((Self::Parts(parts), size))
     }
+
+    /// Give a worker independent file offsets after the original has already
+    /// validated every part and its hashes.
+    pub(crate) fn reopen(&self, path: &Path) -> io::Result<Self> {
+        match self {
+            Self::Single(_) => Ok(Self::Single(File::open(path)?)),
+            Self::Parts(parts) => {
+                let files = (0..parts.files.len())
+                    .map(|index| File::open(suffixed(path, &format!(".part{index:03}"))))
+                    .collect::<io::Result<Vec<_>>>()?;
+                Ok(Self::Parts(PartFile {
+                    files,
+                    starts: parts.starts.clone(),
+                    position: 0,
+                    size: parts.size,
+                }))
+            }
+        }
+    }
 }
 
 impl Read for VoiceFile {

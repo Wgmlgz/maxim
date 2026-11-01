@@ -12,6 +12,7 @@
 /extracted/app/vox/*
 !/extracted/app/vox/lang_ru_ru.dat
 !/extracted/app/vox/vox_ru_maxim22i.parts
+!/extracted/app/vox/vox_ru_maxim22i.unitidx
 !/extracted/app/vox/vox_ru_maxim22i.part[0-9][0-9][0-9]
 /extracted/app/x64/*
 !/extracted/app/x64/voice_ru_maxim.dll

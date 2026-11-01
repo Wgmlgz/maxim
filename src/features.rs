@@ -4,6 +4,7 @@
 
 use std::error::Error;
 use std::io::{Read, Seek, SeekFrom};
+use std::sync::Arc;
 
 use crate::corpus::VoiceDb;
 
@@ -11,7 +12,7 @@ const NAME_WIDTH: usize = 32;
 
 pub(crate) struct FeatureDb {
     section6: Vec<u8>,
-    names: Vec<String>,
+    names: Vec<Arc<str>>,
     content_index: u8,
     has_extra: bool,
 }
@@ -22,11 +23,11 @@ pub(crate) struct CandidateFeatures {
     pub(crate) unit_id: u32,
     pub(crate) raw_row: [u8; 36],
     pub(crate) duration_seconds: f32,
-    pub(crate) context_names: [String; 5],
+    pub(crate) context_names: [Arc<str>; 5],
     pub(crate) section6_offset: u32,
     pub(crate) head_bytes: [u8; 22],
-    pub(crate) middle_names: [String; 4],
-    pub(crate) tail_name: String,
+    pub(crate) middle_names: [Arc<str>; 4],
+    pub(crate) tail_name: Arc<str>,
     pub(crate) middle_flags: [u8; 7],
     pub(crate) tail_flags: [u8; 8],
     pub(crate) content_flags: [bool; 3],
@@ -65,17 +66,17 @@ impl FeatureDb {
         db.file.seek(SeekFrom::Start(section7.offset as u64))?;
         let mut names_data = vec![0u8; section7.len as usize];
         db.file.read_exact(&mut names_data)?;
-        let names: Vec<String> = names_data
+        let names: Vec<Arc<str>> = names_data
             .chunks_exact(NAME_WIDTH)
             .map(|slot| {
                 let end = slot.iter().position(|&b| b == 0).unwrap_or(slot.len());
-                String::from_utf8_lossy(&slot[..end]).to_string()
+                Arc::from(String::from_utf8_lossy(&slot[..end]).as_ref())
             })
             .collect();
         let content_index = u8::try_from(
             names
                 .iter()
-                .position(|name| name == "content")
+                .position(|name| name.as_ref() == "content")
                 .ok_or("missing content name in section 7")?,
         )?;
         let has_extra = if let Ok(section12) = db.section(12) {
@@ -98,7 +99,7 @@ impl FeatureDb {
         })
     }
 
-    fn name(&self, index: u8) -> Result<String, Box<dyn Error>> {
+    fn name(&self, index: u8) -> Result<Arc<str>, Box<dyn Error>> {
         Ok(self
             .names
             .get(index as usize)

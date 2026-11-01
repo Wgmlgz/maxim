@@ -13,6 +13,7 @@ mod synthesis;
 mod target_cost;
 mod text;
 mod tone;
+mod unit_index;
 mod voice_file;
 
 use std::error::Error;
@@ -78,6 +79,7 @@ fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             heuristic_target,
             verbose,
             play,
+            jobs,
         } => {
             let mut db = VoiceDb::open(&vox)?;
             let input = if text == "-" {
@@ -130,6 +132,7 @@ fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
                 mode,
                 targets.as_deref(),
                 verbose,
+                jobs,
             )?;
             if play {
                 playback::play(&output)?;
@@ -152,6 +155,10 @@ fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
                     section.kind, section.offset, section.len
                 );
             }
+        }
+        Command::BuildUnitIndex { jobs } => {
+            let path = unit_index::UnitIndex::build(&vox, jobs)?;
+            eprintln!("Wrote {}", path.display());
         }
         Command::Diphone { name } => {
             let mut db = VoiceDb::open(&vox)?;

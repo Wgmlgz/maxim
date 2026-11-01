@@ -20,7 +20,9 @@ Pushes to the `release` branch build the same five archives and publish them as
 assets on the GitHub Release tagged with the version from `Cargo.toml` (for
 example, `v0.1.0`). A later push with the same version replaces those assets;
 bump the package version for a new release. Each `.tar.gz` or `.zip` archive
-contains the executable and voice data in the required directory layout.
+contains the executable and voice data in the required directory layout. The
+build combines the Git tracked VOX parts into a single verified file inside
+each archive, avoiding per-run part verification when using a release build.
 Extract it and run the executable from the extracted top-level directory.
 
 The `silk-v3-sys` crate builds the SILK C decoder locally. Its build requires a
@@ -32,7 +34,11 @@ The program reads these parts directly; a fresh clone needs no extraction or
 assembly script. If you already have the original unsplit VOX file at the
 default path, the program can read that too. The supplied installer remains
 excluded from Git. `tools/prepare_voice.py` is optional for working with the
-installer, and recognizes the checked-in parts as ready.
+installer, and recognizes the checked-in parts as ready. The tracked
+`vox_ru_maxim22i.unitidx` records unit validity and decoded coverage so the
+default selector decodes only the recordings chosen for the final WAV. It is
+generated from the supplied VOX with `maxim-native build-unit-index` and is
+read directly at runtime; no preparation command is needed after cloning.
 
 Source is split into `lexicon.rs` (Russian lexicon and LTS), `corpus.rs` (DDXV
 and SILK), `features.rs` (candidate metadata), `join.rs` (original join costs),
@@ -42,7 +48,8 @@ and SILK), `features.rs` (candidate metadata), `join.rs` (original join costs),
 `text.rs` (text relations), `normalize.rs` (mixed-text normalization),
 `tone.rs` (phrase-end tone tables),
 `cli.rs` (argument parsing),
-`synthesis.rs` (unit search and stitching),
+`synthesis.rs` (unit search and stitching), `unit_index.rs` (cached unit
+coverage),
 `audio.rs` (WAV), and `main.rs` (CLI).
 
 ## Use
@@ -64,6 +71,8 @@ printf 'Папа купил хлеб.\n' | ./target/release/maxim-native - -o pa
 The first argument is text; quote it so spaces and punctuation stay together.
 The default output is `output.wav`; use `-o` to choose another path. Explicit
 `speak` is optional. Use `--voice PATH` if the VOX database is elsewhere.
+Selected units decode in parallel by default. `--jobs 1` runs this stage on
+one thread, or `--jobs N` chooses a specific worker count (up to 16).
 `--play` plays the generated WAV after writing it, using `afplay` on macOS, or
 an installed `pw-play`, `paplay`, `aplay`, or `ffplay` on Linux. On Windows it
 uses PowerShell's WAV player. The WAV remains at the selected output path.
@@ -121,6 +130,8 @@ full postlex phrase handling, exact duration and intonation targets, and full ta
 [GENERATION_PATHS.md](docs/GENERATION_PATHS.md) for the step-by-step original
 pipeline, and [RESEARCH.md](docs/RESEARCH.md) for binary evidence and data-layout
 notes.
+The measured output-preserving speedups and discarded experiments are in
+[PERFORMANCE.md](docs/PERFORMANCE.md).
 
 If you have the local reference and comparison WAVs, a rough spectral
 comparison is available with:
