@@ -22,6 +22,7 @@
 /analysis/
 /comparison/
 *.wav
+!/demo/maxim-preview.wav
 *.mp3
 *.mdu
 *.snapshot.json

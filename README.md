@@ -1,144 +1,110 @@
-# Maxim native prototype
+# Бот Максим
 
-This is an **offline native Rust/C prototype** using the IVONA Maxim voice data
-from the supplied Speech2Go package. It turns Russian text into a WAV using
-the original compressed lexicon, letter-to-sound rules, syllable decision tree,
-postlex consonant tables, voice corpus, SILK decoder, and class-specific join
-costs. It is **not yet a faithful port of the full IVONA synthesis engine**:
-token normalization, POS, phrasing, intonation, duration targets, and complete
-target-based unit selection remain incomplete.
+**Maxim Native** — офлайн-программа для синтеза русской речи голосом IVONA Maxim. Введите текст в терминале и получите WAV-файл. Работает локально: для озвучки не нужны Telegram-бот, сайт, ключ API или интернет. Есть готовые сборки для Windows, Linux и macOS, а голосовые данные входят в архив каждой сборки.
 
-## Build
+Порт создан с помощью **LLM** и **Reverse Engineer Anything**: исполняемые файлы и данные Speech2Go/IVONA Maxim исследовали через REA, а найденные форматы и алгоритмы реализовали на Rust с декодером SILK на C. Результаты сравнивали с записями оригинальной программы.
+
+«Бот Максим» — знакомое многим название этого голоса из озвучки донатов, роликов и интернет-мемов. [Продавец IVONA называет Maxim русским мужским голосом для Speech2Go](https://harposoftware.com/en/russian/173-maxim-russian-voice.html); [сервис озвучки BigVoicy описывает «Бота Максима» как голос из донатов](https://bigvoicy.com/). Это независимый, пока не полностью точный порт исходного синтезатора.
+
+## Послушать пример
+
+[▶ Послушать WAV-пример голоса Бота Максима](demo/maxim-preview.wav?raw=1).
+
+Текст примера: «Здарова. Как относишься к гипнозу и нейропрограммированию? Есть простой тест, будет ли действовать нейропрограммирование на тебя или нет. Закрой глаза, представь, что в твоей руке солонка с солью. А теперь попробуй посыпать соль себе на язык. Если почувствовал соль, то тебя можно гипнотизировать.»
+
+## Скачать и запустить
+
+Откройте [Releases](https://github.com/Wgmlgz/maxim/releases) и скачайте архив для своей системы:
+
+| Система | Архив |
+| --- | --- |
+| Windows 64-bit | `maxim-native-windows-x86_64.zip` |
+| Linux x86-64 | `maxim-native-linux-x86_64.tar.gz` |
+| Linux ARM64 | `maxim-native-linux-aarch64.tar.gz` |
+| macOS Intel | `maxim-native-macos-x86_64.tar.gz` |
+| macOS Apple Silicon | `maxim-native-macos-aarch64.tar.gz` |
+
+Распакуйте **весь архив** и откройте терминал в полученной папке: программе нужны лежащие рядом данные голоса. Устанавливать оригинальный Speech2Go или запускать Windows-программу через Wine не требуется.
+
+**Linux и macOS:**
 
 ```sh
-cargo build --release
+./maxim-native 'Привет! Это голос Бота Максима.'
 ```
 
-Pushes to `main` run [GitHub Actions](.github/workflows/build.yml) builds for
-Linux x86-64 and ARM64, macOS Intel and Apple Silicon, and Windows x86-64.
-Pushes to the `release` branch build the same five archives and publish them as
-assets on the GitHub Release tagged with the version from `Cargo.toml` (for
-example, `v0.1.0`). A later push with the same version replaces those assets;
-bump the package version for a new release. Each `.tar.gz` or `.zip` archive
-contains the executable and voice data in the required directory layout. The
-build combines the Git tracked VOX parts into a single verified file inside
-each archive, avoiding per-run part verification when using a release build.
-Extract it and run the executable from the extracted top-level directory.
+**Windows (PowerShell):**
 
-The `silk-v3-sys` crate builds the SILK C decoder locally. Its build requires a
-C compiler and libclang. No Windows DLL or network service is used at runtime.
+```powershell
+.\maxim-native.exe 'Привет! Это голос Бота Максима.'
+```
 
-The repository includes the required voice data. The VOX corpus is tracked as
-seven numbered parts of at most 32 MiB, with a manifest and SHA-256 hashes.
-The program reads these parts directly; a fresh clone needs no extraction or
-assembly script. If you already have the original unsplit VOX file at the
-default path, the program can read that too. The supplied installer remains
-excluded from Git. `tools/prepare_voice.py` is optional for working with the
-installer, and recognizes the checked-in parts as ready. The tracked
-`vox_ru_maxim22i.unitidx` records unit validity and decoded coverage so the
-default selector decodes only the recordings chosen for the final WAV. It is
-generated from the supplied VOX with `maxim-native build-unit-index` and is
-read directly at runtime; no preparation command is needed after cloning.
+Результат появится в `output.wav` в текущей папке. Текст с пробелами заключайте в кавычки. Если macOS блокирует скачанный исполняемый файл, разрешите его запуск через системные настройки безопасности.
 
-Source is split into `lexicon.rs` (Russian lexicon and LTS), `corpus.rs` (DDXV
-and SILK), `features.rs` (candidate metadata), `join.rs` (original join costs),
-`target_cost.rs` (original target cost and active partial structural scoring),
-`duration.rs` (original VOX duration CART),
-`syllables.rs` (original syllable CART), `postlex.rs` (Russian consonant rules),
-`text.rs` (text relations), `normalize.rs` (mixed-text normalization),
-`tone.rs` (phrase-end tone tables),
-`cli.rs` (argument parsing),
-`synthesis.rs` (unit search and stitching), `unit_index.rs` (cached unit
-coverage),
-`audio.rs` (WAV), and `main.rs` (CLI).
-
-## Use
+## Как получить аудио из текста
 
 ```sh
+# Указать имя выходного WAV-файла
+./maxim-native 'Папа купил хлеб.' -o papa.wav
+
+# Создать WAV и сразу воспроизвести его
+./maxim-native 'Привет, мир!' --play
+
+# Передать текст через стандартный ввод
+printf 'Мама мыла раму.\n' | ./maxim-native - -o mama.wav
+
+# Ограничить число потоков при декодировании выбранных фрагментов
+./maxim-native 'Привет, мир!' --jobs 1
+```
+
+В Windows замените `./maxim-native` на `.\maxim-native.exe`. Команда `speak` необязательна: текст можно передать первым аргументом. Параметр `-o` задаёт путь к файлу, `--play` воспроизводит уже созданный WAV, `--verbose` показывает этапы синтеза и выбранные звуковые фрагменты. Параметр `--voice ПУТЬ` позволяет указать другой VOX-файл или набор его частей с сопутствующими данными. В интерактивном терминале отображается индикатор прогресса. Для воспроизведения в Linux нужен один из установленных проигрывателей `pw-play`, `paplay`, `aplay` или `ffplay`; в macOS используется `afplay`, в Windows — PowerShell.
+
+Выходной файл — моно WAV, PCM 16 бит, 22,05 кГц. Для MP3 можно затем конвертировать его любой внешней программой. Цифры, распространённые символы, латинские буквы и знаки препинания принимаются, но их чтение пока не всегда совпадает с оригинальной IVONA.
+
+## Скорость
+
+Для ускорения синтеза добавлены индекс пригодных фрагментов голоса, буферизованная запись WAV и параллельное декодирование выбранных фрагментов. Это не меняет байты готового аудио; подробные проверки и эксперименты описаны в [заметках о производительности](docs/PERFORMANCE.md).
+
+На MacBook Pro с **Apple M1 Pro (10 ядер)** сборка `--release` создала WAV за следующее время (медиана пяти запусков, включая запуск программы, с прогретым файловым кэшем):
+
+| Текст | Время генерации |
+| --- | ---: |
+| «Папа купил хлеб.» | 0,33 с |
+| Четыре коротких предложения | 0,50 с |
+| Пример про гипноз выше (аудио 21 с) | 1,25 с |
+
+На других компьютерах время будет отличаться.
+
+## Сборка из исходников
+
+Нужны Rust/Cargo, компилятор C и `libclang` для сборки декодера SILK. Репозиторий уже содержит необходимые данные голоса; отдельная распаковка установщика не нужна.
+
+```sh
+git clone https://github.com/Wgmlgz/maxim.git
 cd maxim
-./target/release/maxim-native 'Привет, мама!'
-./target/release/maxim-native 'Привет, мама!' --play
-./target/release/maxim-native 'Цена 12,50 ₽. Hello, world!' -o mixed.wav
-printf 'Папа купил хлеб.\n' | ./target/release/maxim-native - -o papa.wav
-
-# Compare the earlier letter mapper and join heuristic:
-./target/release/maxim-native 'Папа купил хлеб.' -o papa-older.wav --simple-phones --join basic
-
-# Compare the earlier context-only selector:
-./target/release/maxim-native 'Папа купил хлеб.' -o papa-heuristic.wav --heuristic-target
+cargo build --release --locked
+./target/release/maxim-native 'Привет, мир!' -o hello.wav
 ```
 
-The first argument is text; quote it so spaces and punctuation stay together.
-The default output is `output.wav`; use `-o` to choose another path. Explicit
-`speak` is optional. Use `--voice PATH` if the VOX database is elsewhere.
-Selected units decode in parallel by default. `--jobs 1` runs this stage on
-one thread, or `--jobs N` chooses a specific worker count (up to 16).
-`--play` plays the generated WAV after writing it, using `afplay` on macOS, or
-an installed `pw-play`, `paplay`, `aplay`, or `ffplay` on Linux. On Windows it
-uses PowerShell's WAV player. The WAV remains at the selected output path.
-An interactive terminal shows progress through unit selection and rendering.
-Redirected output gets only the final output path. Use `--verbose` for the
-phone sequence, selected units, costs, and sample counts; it hides the progress
-bar while those details print.
-Numbers, common symbols, English letters, and punctuation are accepted; the
-number and symbol wording is still a partial port of the original token
-normalizer, especially for dates and currency inflection. Unsupported symbols
-delimit tokens. The
-`speak` output is mono 16-bit PCM at 22.05 kHz, matching the supplied reference
-MP3s. SILK decoding internally requests 24 kHz, but the original renderer
-plays those decoded pitchmark periods at the VOX header rate of 22.05 kHz.
-Diagnostic `decode-unit` and `decode-packet` now use that playback rate too.
-Keep `lang_ru_ru.dat` beside the VOX file and `x64/voice_ru_maxim.dll` in the
-sibling `x64` directory. The DLL is read as data; it is not executed. Some
-phone combinations may lack a diphone and fail rather than produce audio.
-Internal hyphens are preserved for entries in the original lexicon.
+В PowerShell последняя команда выглядит так:
 
-Diagnostic commands:
+```powershell
+.\target\release\maxim-native.exe 'Привет, мир!' -o hello.wav
+```
+
+Для получения зависимостей при первой сборке Cargo может потребоваться интернет. **После сборки синтез речи работает офлайн.** Репозиторий хранит голосовой VOX-файл семью частями и читает их напрямую; готовые архивы содержат уже собранный VOX. Файлы `extracted/app/vox/lang_ru_ru.dat`, `extracted/app/vox/vox_ru_maxim22i.unitidx` и `extracted/app/x64/voice_ru_maxim.dll` также должны оставаться в своих папках. DLL считывается как файл данных и не запускается.
+
+## Насколько это похоже на оригинал
+
+Программа использует словарь, правила произношения, голосовой корпус, декодирование SILK и часть правил выбора и соединения фрагментов из поставленного пакета IVONA Maxim. Но перенос ещё не завершён: обработка текста, грамматика, фразировка, интонация и длительность речи могут отличаться от оригинального Speech2Go. Некоторые сочетания звуков пока не удаётся озвучить. Этот проект подходит для локальных экспериментов с узнаваемым голосом Максима; совпадение с оригинальной программой для любого текста не гарантируется.
+
+Дополнительные команды для исследования корпуса:
 
 ```sh
 ./target/release/maxim-native inspect
 ./target/release/maxim-native phones 'Я люблю чай.'
-./target/release/maxim-native syllables 'Папа купил хлеб.'
-./target/release/maxim-native phones-simple 'Я люблю чай.'
-./target/release/maxim-native diphone a-b
-./target/release/maxim-native features 126192
-./target/release/maxim-native duration-text 'Папа купил хлеб.'
-./target/release/maxim-native lookup автоматным
 ./target/release/maxim-native pronounce папа
-./target/release/maxim-native decode-unit 4 -o unit.wav
-./target/release/maxim-native decode-packet 0x20404fb -o packet.wav
-./target/release/maxim-native dump-diphone a-p -o a-p.mdu
+./target/release/maxim-native diphone a-b
+./target/release/maxim-native --help
 ```
 
-## Port boundary
-
-The voice database contains 1,612 diphones and 565,950 candidate unit IDs.
-`lookup` reads only exact lexicon entries; `pronounce` uses the same lexicon and
-the original LTS fallback. `speak` now uses that pronunciation path and the
-five original class-specific join costs by default. The default selector uses
-the original target-cost terms whose
-text inputs are known, estimates from the original duration CART, phrase end
-tone, stress-first
-candidate filtering, context retention, and the original 50-state beam and join
-costs. It is still incomplete because word class and phrase features are
-approximated. `--heuristic-target`, `--basic-join`, and `--acoustic-join`
-retain earlier experiments.
-Recorded silence in `pau` units is trimmed at pitchmark boundaries, shortening
-the excessive gaps that occurred after punctuation.
-A complete port still needs the original tokenizer, POS and phrasing rules,
-full postlex phrase handling, exact duration and intonation targets, and full target cost integration. See
-[GENERATION_PATHS.md](docs/GENERATION_PATHS.md) for the step-by-step original
-pipeline, and [RESEARCH.md](docs/RESEARCH.md) for binary evidence and data-layout
-notes.
-The measured output-preserving speedups and discarded experiments are in
-[PERFORMANCE.md](docs/PERFORMANCE.md).
-
-If you have the local reference and comparison WAVs, a rough spectral
-comparison is available with:
-
-```sh
-python3 tools/compare_waves.py analysis/ref-1.wav comparison/papa-heuristic.wav comparison/papa-current.wav
-```
-
-This metric compares spectral trajectories. It does not measure pronunciation
-or listening quality.
+Подробности переноса: [пути генерации](docs/GENERATION_PATHS.md), [исследование оригинальной программы](docs/RESEARCH.md) и [производительность](docs/PERFORMANCE.md). Сборки для всех пяти платформ проверяются в [GitHub Actions](.github/workflows/build.yml) при изменениях в `main`; публикация архивов в Releases запускается при отправке изменений в ветку `release`.
